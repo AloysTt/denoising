@@ -1,5 +1,5 @@
 #include <lib.h>
-
+#include <random>
 
 void bilateral(const cv::Mat & image, cv::Mat & out, int d, double color, double space)
 {
@@ -43,4 +43,82 @@ void bilateral(const cv::Mat & image, cv::Mat & out, int d, double color, double
 float gaussian(float x, float sigma)
 {
 	return exp(-(x * x) / (2.0f * sigma * sigma));
+}
+
+void ajouterBruitPoisson(cv::Mat& imageRef, cv::Mat& image, double intensiteMoyenne)
+{
+	image = imageRef.clone();
+    std::default_random_engine generateur;
+    std::poisson_distribution<int> distributionPoisson(intensiteMoyenne);
+
+    for (int y = 0; y < image.rows; ++y) {
+        for (int x = 0; x < image.cols; ++x) {
+
+            int echantillon = distributionPoisson(generateur);
+
+            if (image.channels() == 1) {
+
+                image.at<uchar>(y, x) = cv::saturate_cast<uchar>(image.at<uchar>(y, x) + echantillon);
+            } else if (image.channels() == 3) {
+
+                for (int c = 0; c < image.channels(); ++c) {
+                    image.at<cv::Vec3b>(y, x)[c] = cv::saturate_cast<uchar>(image.at<cv::Vec3b>(y, x)[c] + echantillon);
+                }
+            }
+        }
+    }
+}
+
+void ajouterBruitGaussian(cv::Mat& imageRef, cv::Mat& image, double intensiteBruit)
+{
+	image = imageRef.clone();
+    std::default_random_engine generateur;
+    std::normal_distribution<double> distributionGaussienne(0.0, intensiteBruit);
+
+    for (int y = 0; y < image.rows; ++y) {
+        for (int x = 0; x < image.cols; ++x) {
+
+            double echantillon = distributionGaussienne(generateur);
+
+            if (image.channels() == 1) {
+
+                image.at<uchar>(y, x) = cv::saturate_cast<uchar>(image.at<uchar>(y, x) + echantillon);
+            } else if (image.channels() == 3) {
+
+                for (int c = 0; c < image.channels(); ++c) {
+                    image.at<cv::Vec3b>(y, x)[c] = cv::saturate_cast<uchar>(image.at<cv::Vec3b>(y, x)[c] + echantillon);
+                }
+            }
+        }
+    }
+}
+
+
+void ajouterBruitSelEtPoivre(cv::Mat& imageRef, cv::Mat& image, double pourcentageBruit)
+{
+	    image = imageRef.clone();
+    for (int y = 0; y < image.rows; ++y) {
+        for (int x = 0; x < image.cols; ++x) {
+            int r = std::rand() % 100;
+            if (r < pourcentageBruit / 2) {
+
+                if (image.channels() == 1) {
+                    image.at<uchar>(y, x) = 0;
+                } else if (image.channels() == 3) {
+                    for (int c = 0; c < image.channels(); ++c) {
+                        image.at<cv::Vec3b>(y, x)[c] = 0;
+                    }
+                }
+            } else if (r < pourcentageBruit) {
+
+                if (image.channels() == 1) {
+                    image.at<uchar>(y, x) = 255;
+                } else if (image.channels() == 3) {
+                    for (int c = 0; c < image.channels(); ++c) {
+                        image.at<cv::Vec3b>(y, x)[c] = 255;
+                    }
+                }
+            }
+        }
+    }
 }
