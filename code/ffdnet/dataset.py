@@ -14,6 +14,8 @@ import os
 import os.path
 import random
 import glob
+import string
+
 import numpy as np
 import cv2
 import h5py
@@ -46,6 +48,7 @@ def img_to_patches(img, win, stride=1):
 
 def prepare_data(data_path, \
 				 val_data_path, \
+				 gd_path, \
 				 patch_size, \
 				 stride, \
 				 max_num_patches=None, \
@@ -69,9 +72,19 @@ def prepare_data(data_path, \
 	scales = [1, 0.9, 0.8, 0.7]
 	types = ('*.bmp', '*.png')
 	files = []
+	filesgd = []
 	for tp in types:
 		files.extend(glob.glob(os.path.join(data_path, tp)))
 	files.sort()
+
+	for tp in types:
+		filesgd.extend(glob.glob(os.path.join(gd_path, tp)))
+	filesgd.sort()
+
+	gdMap = {}
+	for file in filesgd:
+		basename = file.split("/")[-1][:-4]
+		gdMap[basename] = file
 
 	if gray_mode:
 		traindbf = 'train_gray.h5'
@@ -89,29 +102,42 @@ def prepare_data(data_path, \
 	i = 0
 	with h5py.File(traindbf, 'w') as h5f:
 		while i < len(files) and train_num < max_num_patches:
+			filename = files[i]
+			basename = filename.split("/")[-1][:-4].rstrip(string.digits)
+			gdName = gdMap[basename]
 			imgor = cv2.imread(files[i])
+			imgor_gd = cv2.imread(files[i])
 			# h, w, c = img.shape
 			for sca in scales:
 				img = cv2.resize(imgor, (0, 0), fx=sca, fy=sca, \
 								interpolation=cv2.INTER_CUBIC)
+				img_gd = cv2.resize(imgor_gd, (0, 0), fx=sca, fy=sca, \
+								interpolation=cv2.INTER_CUBIC)
 				if not gray_mode:
 					# CxHxW RGB image
 					img = (cv2.cvtColor(img, cv2.COLOR_BGR2RGB)).transpose(2, 0, 1)
+					img_gd = (cv2.cvtColor(img_gd, cv2.COLOR_BGR2RGB)).transpose(2, 0, 1)
 				else:
 					# CxHxW grayscale image (C=1)
 					img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 					img = np.expand_dims(img, 0)
+					img_gd = cv2.cvtColor(img_gd, cv2.COLOR_BGR2GRAY)
+					img_gd = np.expand_dims(img_gd, 0)
 				img = normalize(img)
+				img_gd = normalize(img_gd)
 				patches = img_to_patches(img, win=patch_size, stride=stride)
+				patches_gd = img_to_patches(img_gd, win=patch_size, stride=stride)
 				print("\tfile: %s scale %.1f # samples: %d" % \
 					  (files[i], sca, patches.shape[3]*aug_times))
 				for nx in range(patches.shape[3]):
-					data = data_augmentation(patches[:, :, :, nx].copy(), \
-							  np.random.randint(0, 7))
-					h5f.create_dataset(str(train_num), data=data)
+					randseed = np.random.randint(0, 7)
+					data = data_augmentation(patches[:, :, :, nx].copy(), randseed)
+					data_gd = data_augmentation(patches_gd[:, :, :, nx].copy(), randseed)
+					data_final = np.concatenate([data, data_gd], axis=0)
+					h5f.create_dataset(str(train_num), data=data_final)
 					train_num += 1
 					for mx in range(aug_times-1):
-						data_aug = data_augmentation(data, np.random.randint(1, 4))
+						data_aug = data_augmentation(data_final, np.random.randint(1, 4))
 						h5f.create_dataset(str(train_num)+"_aug_%d" % (mx+1), data=data_aug)
 						train_num += 1
 			i += 1
@@ -126,16 +152,24 @@ def prepare_data(data_path, \
 	val_num = 0
 	for i, item in enumerate(files):
 		print("\tfile: %s" % item)
+		basename = item.split("/")[-1][:-4].rstrip(string.digits)
+		gdName = gdMap[basename]
 		img = cv2.imread(item)
+		img_gd = cv2.imread(gdName)
 		if not gray_mode:
 			# C. H. W, RGB image
 			img = (cv2.cvtColor(img, cv2.COLOR_BGR2RGB)).transpose(2, 0, 1)
+			img_gd = (cv2.cvtColor(img_gd, cv2.COLOR_BGR2RGB)).transpose(2, 0, 1)
 		else:
 			# C, H, W grayscale image (C=1)
 			img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 			img = np.expand_dims(img, 0)
+			img_gd = cv2.cvtColor(img_gd, cv2.COLOR_BGR2GRAY)
+			img_gd = np.expand_dims(img_gd, 0)
 		img = normalize(img)
-		h5f.create_dataset(str(val_num), data=img)
+		img_gd = normalize(img_gd)
+		img_final = np.concatenate([img, img_gd], axis=0)
+		h5f.create_dataset(str(val_num), data=img_final)
 		val_num += 1
 	h5f.close()
 
