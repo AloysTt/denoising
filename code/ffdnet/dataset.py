@@ -152,7 +152,7 @@ def prepare_data(data_path, \
 	val_num = 0
 	for i, item in enumerate(files):
 		print("\tfile: %s" % item)
-		basename = item.split("/")[-1][:-4].rstrip(string.digits)
+		basename = item.split(os.path.sep)[-1][:-4].rstrip(string.digits+"_")
 		gdName = gdMap[basename]
 		img = cv2.imread(item)
 		img_gd = cv2.imread(gdName)
