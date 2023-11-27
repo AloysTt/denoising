@@ -83,7 +83,7 @@ def prepare_data(data_path, \
 
 	gdMap = {}
 	for file in filesgd:
-		basename = file.split("/")[-1][:-4]
+		basename = file.split(os.path.sep)[-1][:-4]
 		gdMap[basename] = file
 
 	if gray_mode:
@@ -103,10 +103,10 @@ def prepare_data(data_path, \
 	with h5py.File(traindbf, 'w') as h5f:
 		while i < len(files) and train_num < max_num_patches:
 			filename = files[i]
-			basename = filename.split("/")[-1][:-4].rstrip(string.digits)
+			basename = filename.split(os.path.sep)[-1][:-4].rstrip(string.digits+"_")
 			gdName = gdMap[basename]
 			imgor = cv2.imread(files[i])
-			imgor_gd = cv2.imread(files[i])
+			imgor_gd = cv2.imread(gdName)
 			# h, w, c = img.shape
 			for sca in scales:
 				img = cv2.resize(imgor, (0, 0), fx=sca, fy=sca, \
