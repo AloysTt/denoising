@@ -134,7 +134,8 @@ def main(args):
 			optimizer.zero_grad()
 
 			# inputs: noise and noisy image
-			img_train = data
+			img_train = data[:, :3, :, :]
+			imgn_train = data[:, 3:, :, :]
 			noise = torch.zeros(img_train.size())
 			stdn = np.random.uniform(args.noiseIntL[0], args.noiseIntL[1], \
 							size=noise.size()[0])
@@ -142,7 +143,6 @@ def main(args):
 				sizen = noise[0, :, :, :].size()
 				noise[nx, :, :, :] = torch.FloatTensor(sizen).\
 									normal_(mean=0, std=stdn[nx])
-			imgn_train = img_train + noise
 			# Create input Variables
 			img_train = Variable(img_train.cuda())
 			imgn_train = Variable(imgn_train.cuda())
@@ -179,10 +179,10 @@ def main(args):
 		# Validation
 		psnr_val = 0
 		for valimg in dataset_val:
-			img_val = torch.unsqueeze(valimg, 0)
-			noise = torch.FloatTensor(img_val.size()).\
-					normal_(mean=0, std=args.val_noiseL)
-			imgn_val = img_val + noise
+			imgn_val = torch.unsqueeze(valimg, 0)
+			img_val = imgn_val[:, 3:, :, :]
+			imgn_val = imgn_val[:, :3, :, :]
+
 			img_val, imgn_val = Variable(img_val.cuda()), Variable(imgn_val.cuda())
 			sigma_noise = Variable(torch.cuda.FloatTensor([args.val_noiseL]))
 			out_val = torch.clamp(imgn_val-model(imgn_val, sigma_noise), 0., 1.)

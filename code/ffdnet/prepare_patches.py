@@ -32,6 +32,8 @@ if __name__ == "__main__":
 					 help='path of trainset')
 	parser.add_argument("--valset_dir", type=str, default=None, \
 						 help='path of validation set')
+	parser.add_argument("--groundtruth_dir", type=str, default=None, \
+					 help='path of ground truth dir')
 	args = parser.parse_args()
 
 	if args.gray:
@@ -53,6 +55,7 @@ if __name__ == "__main__":
 
 	prepare_data(args.trainset_dir,\
 					args.valset_dir,\
+					args.groundtruth_dir,\
 					args.patch_size,\
 					args.stride,\
 					args.max_number_patches,\
