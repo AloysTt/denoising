@@ -1,7 +1,10 @@
-torch==2.1.1
 numpy==1.26.2
 scikit-image==0.22.0
 opencv-python==4.8.1.78
-torchvision==0.16.1
 tensorboardX==2.6.2.2
 h5py==3.10.0
+
+-i https://download.pytorch.org/whl/cu121
+torch==2.1.1
+torchvision==0.16.1
+--extra-index-url https://pypi.org/simple/
