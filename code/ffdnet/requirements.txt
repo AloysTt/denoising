@@ -1,0 +1,4 @@
+torch==2.1.1
+numpy==1.26.2
+scikit-image==0.22.0
+opencv-python==4.8.1.78
