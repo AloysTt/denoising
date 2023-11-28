@@ -103,7 +103,7 @@ def prepare_data(data_path, \
 	with h5py.File(traindbf, 'w') as h5f:
 		while i < len(files) and train_num < max_num_patches:
 			filename = files[i]
-			basename = filename.split(os.path.sep)[-1][:-4].rstrip(string.digits+"_")
+			basename = filename.split(os.path.sep)[-1][:-4].rstrip(string.digits).rstrip("_")
 			gdName = gdMap[basename]
 			imgor = cv2.imread(files[i])
 			imgor_gd = cv2.imread(gdName)
@@ -152,7 +152,7 @@ def prepare_data(data_path, \
 	val_num = 0
 	for i, item in enumerate(files):
 		print("\tfile: %s" % item)
-		basename = item.split(os.path.sep)[-1][:-4].rstrip(string.digits+"_")
+		basename = item.split(os.path.sep)[-1][:-4].rstrip(string.digits).rstrip("_")
 		gdName = gdMap[basename]
 		img = cv2.imread(item)
 		img_gd = cv2.imread(gdName)
