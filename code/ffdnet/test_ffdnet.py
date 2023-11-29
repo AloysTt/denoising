@@ -113,7 +113,8 @@ def test_ffdnet(**args):
 
 	# Estimate noise and subtract it to the input image
 	im_noise_estim = model(imnoisy, nsigma)
-	outim = torch.clamp(imnoisy-im_noise_estim, 0., 1.)
+	#outim = torch.clamp(imnoisy-im_noise_estim, 0., 1.)
+	outim = im_noise_estim
 	stop_t = time.time()
 
 	if expanded_h:

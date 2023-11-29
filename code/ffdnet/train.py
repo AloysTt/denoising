@@ -32,6 +32,7 @@ from utils import weights_init_kaiming, batch_psnr, init_logger, \
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:256"
 
 def main(args):
 	r"""Performs the main training loop
@@ -134,8 +135,8 @@ def main(args):
 			optimizer.zero_grad()
 
 			# inputs: noise and noisy image
-			img_train = data[:, :3, :, :]
-			imgn_train = data[:, 3:, :, :]
+			img_train = data[:, 3:, :, :]
+			imgn_train = data[:, :3, :, :]
 			noise = torch.zeros(img_train.size())
 			stdn = np.random.uniform(args.noiseIntL[0], args.noiseIntL[1], \
 							size=noise.size()[0])
@@ -173,6 +174,9 @@ def main(args):
 				print("[epoch %d][%d/%d] loss: %.4f PSNR_train: %.4f" %\
 					(epoch+1, i+1, len(loader_train), loss.item(), psnr_train))
 			training_params['step'] += 1
+			# Add the following line to release GPU memory after each iteration
+			torch.cuda.empty_cache()
+
 		# The end of each epoch
 		model.eval()
 
