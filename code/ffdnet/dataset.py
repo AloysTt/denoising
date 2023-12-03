@@ -101,6 +101,7 @@ def prepare_data(data_path, \
 	train_num = 0
 	i = 0
 	with h5py.File(traindbf, 'w') as h5f:
+		ds = h5f.create_dataset("train", (0, 6, patch_size, patch_size), maxshape=(None, 6, patch_size, patch_size))
 		while i < len(files) and train_num < max_num_patches:
 			filename = files[i]
 			basename = filename.split(os.path.sep)[-1][:-4].rstrip(string.digits).rstrip("_")
@@ -129,16 +130,19 @@ def prepare_data(data_path, \
 				patches_gd = img_to_patches(img_gd, win=patch_size, stride=stride)
 				print("\tfile: %s scale %.1f # samples: %d" % \
 					  (files[i], sca, patches.shape[3]*aug_times))
+				ds.resize(size=ds.shape[0]+(patches.shape[3]*aug_times), axis=0)
 				for nx in range(patches.shape[3]):
 					randseed = np.random.randint(0, 7)
 					data = data_augmentation(patches[:, :, :, nx].copy(), randseed)
 					data_gd = data_augmentation(patches_gd[:, :, :, nx].copy(), randseed)
 					data_final = np.concatenate([data, data_gd], axis=0)
-					h5f.create_dataset(str(train_num), data=data_final)
+					ds[train_num, :, :, :] = data_final
+					# h5f.create_dataset(str(train_num), data=data_final)
 					train_num += 1
 					for mx in range(aug_times-1):
 						data_aug = data_augmentation(data_final, np.random.randint(1, 4))
-						h5f.create_dataset(str(train_num)+"_aug_%d" % (mx+1), data=data_aug)
+						ds[train_num, :, :, :] = data_aug
+						# h5f.create_dataset(str(train_num)+"_aug_%d" % (mx+1), data=data_aug)
 						train_num += 1
 			i += 1
 
@@ -177,24 +181,44 @@ def prepare_data(data_path, \
 	print('\ttraining set, # samples %d' % train_num)
 	print('\tvalidation set, # samples %d\n' % val_num)
 
-class Dataset(udata.Dataset):
+
+class DatasetTrain(udata.Dataset):
 	r"""Implements torch.utils.data.Dataset
 	"""
-	def __init__(self, train=True, gray_mode=False, shuffle=False):
-		super(Dataset, self).__init__()
-		self.train = train
+	def __init__(self, gray_mode=False, shuffle=False):
+		super(DatasetTrain, self).__init__()
 		self.gray_mode = gray_mode
 		if not self.gray_mode:
-			self.traindbf = 'train_rgb.h5'
-			self.valdbf = 'val_rgb.h5'
+			self.dbf = 'train_rgb.h5'
 		else:
-			self.traindbf = 'train_gray.h5'
-			self.valdbf = 'val_gray.h5'
+			self.dbf = 'train_gray.h5'
 
-		if self.train:
-			h5f = h5py.File(self.traindbf, 'r')
+		h5f = h5py.File(self.dbf, 'r')
+		self.data = np.zeros(shape=h5f["train"].shape)
+		h5f["train"].read_direct(self.data)
+		self.keys = list(range(self.data.shape[0]))
+		if shuffle:
+			random.shuffle(self.keys)
+
+	def __len__(self):
+		return len(self.keys)
+
+	def __getitem__(self, index):
+		key = self.keys[index]
+		return torch.Tensor(self.data[key, :, :, :])
+
+class DatasetValidation(udata.Dataset):
+	r"""Implements torch.utils.data.Dataset
+	"""
+	def __init__(self, gray_mode=False, shuffle=False):
+		super(DatasetValidation, self).__init__()
+		self.gray_mode = gray_mode
+		if not self.gray_mode:
+			self.dbf = 'val_rgb.h5'
 		else:
-			h5f = h5py.File(self.valdbf, 'r')
+			self.dbf = 'val_gray.h5'
+
+		h5f = h5py.File(self.dbf, 'r')
 		self.keys = list(h5f.keys())
 		if shuffle:
 			random.shuffle(self.keys)
@@ -204,10 +228,7 @@ class Dataset(udata.Dataset):
 		return len(self.keys)
 
 	def __getitem__(self, index):
-		if self.train:
-			h5f = h5py.File(self.traindbf, 'r')
-		else:
-			h5f = h5py.File(self.valdbf, 'r')
+		h5f = h5py.File(self.dbf, 'r')
 		key = self.keys[index]
 		data = np.array(h5f[key])
 		h5f.close()

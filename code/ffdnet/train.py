@@ -26,7 +26,7 @@ from torch.utils.data import DataLoader
 import torchvision.utils as utils
 from tensorboardX import SummaryWriter
 from models import FFDNet
-from dataset import Dataset
+from dataset import DatasetTrain, DatasetValidation
 from utils import weights_init_kaiming, batch_psnr, init_logger, \
 			svd_orthogonalization
 
@@ -39,10 +39,10 @@ def main(args):
 	"""
 	# Load dataset
 	print('> Loading dataset ...')
-	dataset_train = Dataset(train=True, gray_mode=args.gray, shuffle=True)
-	dataset_val = Dataset(train=False, gray_mode=args.gray, shuffle=False)
-	loader_train = DataLoader(dataset=dataset_train, num_workers=6, \
-							   batch_size=args.batch_size, shuffle=True)
+	dataset_train = DatasetTrain(gray_mode=args.gray, shuffle=True)
+	dataset_val = DatasetValidation(gray_mode=args.gray, shuffle=False)
+	loader_train = DataLoader(dataset=dataset_train, num_workers=0,
+							  batch_size=args.batch_size, shuffle=True)#, persistent_workers=True)
 	print("\t# of training samples: %d\n" % int(len(dataset_train)))
 
 	# Init loggers
@@ -158,7 +158,7 @@ def main(args):
 
 			# Results
 			model.eval()
-			out_train = torch.clamp(imgn_train-model(imgn_train, stdn_var), 0., 1.)
+			out_train = model(imgn_train, stdn_var)
 			psnr_train = batch_psnr(out_train, img_train, 1.)
 			# PyTorch v0.4.0: loss.data[0] --> loss.item()
 
@@ -189,7 +189,7 @@ def main(args):
 
 			img_val, imgn_val = Variable(img_val.cuda()), Variable(imgn_val.cuda())
 			sigma_noise = Variable(torch.cuda.FloatTensor([args.val_noiseL]))
-			out_val = torch.clamp(imgn_val-model(imgn_val, sigma_noise), 0., 1.)
+			out_val = model(imgn_val, sigma_noise)
 			psnr_val += batch_psnr(out_val, img_val, 1.)
 		psnr_val /= len(dataset_val)
 		print("\n[epoch %d] PSNR_val: %.4f" % (epoch+1, psnr_val))
