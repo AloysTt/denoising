@@ -1,9 +1,12 @@
 import cv2
 import tkinter as tk
 from tkinter import filedialog, Menu
+
+import torch.cuda
 from PIL import Image, ImageTk
 import numpy as np
 from skimage.metrics import structural_similarity
+from exec_model import run_model
 
 def apply_bilateral_filter(image_np, d, sigma_color, sigma_space):
 
@@ -70,6 +73,7 @@ class ImageProcessingApp:
         filter_left_menu.add_command(label="Apply Gaussian Filter", command=self.apply_gaussian_filter)
         filter_left_menu.add_command(label="Apply Median Filter", command=self.apply_median_filter)
         filter_left_menu.add_command(label="Apply Bilateral Filter", command=self.apply_bilateral_filter)
+        filter_left_menu.add_command(label="Apply FFDNet", command=self.apply_ffdnet)
 
         # Menu "Filter Right to Right"
         filter_right_menu = Menu(menubar, tearoff=0)
@@ -78,6 +82,7 @@ class ImageProcessingApp:
         filter_right_menu.add_command(label="Apply Gaussian Filter", command=self.apply_gaussian_filter_right)
         filter_right_menu.add_command(label="Apply Median Filter", command=self.apply_median_filter_right)
         filter_right_menu.add_command(label="Apply Bilateral Filter", command=self.apply_bilateral_filter_right)
+        filter_right_menu.add_command(label="Apply FFDNet", command=self.apply_ffdnet_right)
 
         # Menu "Compare Left and Right"
         compare_menu = Menu(menubar, tearoff=0)
@@ -135,6 +140,35 @@ class ImageProcessingApp:
                 image_pil = ImageTk.getimage(self.image_right_placeholder.image)
                 image_pil.save(file_path)
 
+    def apply_ffdnet(self):
+        if hasattr(self.image_left_placeholder, "image") and self.image_left_placeholder.image:
+            image_pil = ImageTk.getimage(self.image_left_placeholder.image)
+            image_np=np.array(image_pil)
+            # Apply FFDNet
+            denoised_img = run_model(image_np, torch.cuda.is_available(), "net.pth", 50)
+
+            new_img = Image.fromarray(denoised_img)
+            new_img = ImageTk.PhotoImage(new_img)
+
+            # Mettre à jour le placeholder de l'image droite
+            self.image_right_placeholder.configure(image=new_img, text="")
+            self.image_right_placeholder.image = new_img
+            self.resizeImages()
+
+    def apply_ffdnet_right(self):
+        if hasattr(self.image_right_placeholder, "image") and self.image_right_placeholder.image:
+            image_pil = ImageTk.getimage(self.image_right_placeholder.image)
+            image_np=np.array(image_pil)
+            # Apply FFDNet
+            denoised_img = run_model(image_np, torch.cuda.is_available(), "net.pth", 50)
+
+            new_img = Image.fromarray(denoised_img)
+            new_img = ImageTk.PhotoImage(new_img)
+
+            # Mettre à jour le placeholder de l'image droite
+            self.image_right_placeholder.configure(image=new_img, text="")
+            self.image_right_placeholder.image = new_img
+            self.resizeImages()
 
     def blur_image_left(self):
         if hasattr(self.image_left_placeholder, "image") and self.image_left_placeholder.image:
