@@ -11,6 +11,22 @@ def apply_bilateral_filter(image_np, d, sigma_color, sigma_space):
 
     return filtered_image
 
+def resize_image(image: ImageTk.PhotoImage, max_width, max_height):
+    width, height = image.width(), image.height()
+    aspect_ratio = width / height
+
+    if width > max_width:
+        new_width = int(max_width)
+        new_height = int(new_width / aspect_ratio)
+    elif height > max_height:
+        new_height = int(max_height)
+        new_width = int(new_height * aspect_ratio)
+    else:
+        new_width, new_height = width, height
+
+    newImage = ImageTk.getimage(image)
+    resized_image = newImage.resize((new_width, new_height), Image.NEAREST)
+    return ImageTk.PhotoImage(resized_image)
 
 class ImageProcessingApp:
     def __init__(self, root):
@@ -24,11 +40,11 @@ class ImageProcessingApp:
 
         # Placeholder pour l'image de gauche
         self.image_left_placeholder = tk.Label(self.image_frame, text="Image Gauche")
-        self.image_left_placeholder.pack(side=tk.LEFT, padx=10, pady=10, expand=True, fill=tk.X)  # Utiliser fill=tk.X pour occuper toute la largeur
+        self.image_left_placeholder.pack(side=tk.LEFT, padx=10, pady=10, expand=True, fill=tk.X)
 
         # Placeholder pour l'image de droite
         self.image_right_placeholder = tk.Label(self.image_frame, text="Image Droite")
-        self.image_right_placeholder.pack(side=tk.LEFT, padx=10, pady=10, expand=True, fill=tk.X)  # Utiliser fill=tk.X pour occuper toute la largeur
+        self.image_right_placeholder.pack(side=tk.LEFT, padx=10, pady=10, expand=True, fill=tk.X)
 
         # Barre de menus
         menubar = Menu(self.root)
@@ -77,7 +93,24 @@ class ImageProcessingApp:
 
         # Stocker l'image gauche originale
         self.original_image_left = None
+        self.original_image_right = None
 
+    def resizeImages(self):
+        if not (hasattr(self.image_left_placeholder, "image") and self.image_left_placeholder.image
+                and hasattr(self.image_right_placeholder, "image") and self.image_right_placeholder.image):
+            return
+        current_image_left = ImageTk.getimage(self.image_left_placeholder.image)
+        self.original_image_right = ImageTk.PhotoImage(ImageTk.getimage(self.image_right_placeholder.image))
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+
+        resized_left = resize_image(ImageTk.PhotoImage(current_image_left), width/2, height)
+        resized_right = resize_image(self.original_image_right, width/2, height)
+
+        self.image_left_placeholder.configure(image=resized_left, text="")
+        self.image_left_placeholder.image = resized_left
+        self.image_right_placeholder.configure(image=resized_right, text="")
+        self.image_right_placeholder.image = resized_right
 
     def load_image_left(self):
         file_path = filedialog.askopenfilename(title="Sélectionner une image")
@@ -141,6 +174,8 @@ class ImageProcessingApp:
             self.image_right_placeholder.configure(image=average_filtered_image, text="")
             self.image_right_placeholder.image = average_filtered_image
 
+            self.resizeImages()
+
     def apply_gaussian_filter(self):
         if hasattr(self.image_left_placeholder, "image") and self.image_left_placeholder.image:
             # Récupérer l'image de gauche
@@ -160,6 +195,8 @@ class ImageProcessingApp:
             self.image_right_placeholder.configure(image=gaussian_filtered_image, text="")
             self.image_right_placeholder.image = gaussian_filtered_image
 
+            self.resizeImages()
+
     def apply_median_filter(self):
         if hasattr(self.image_left_placeholder, "image") and self.image_left_placeholder.image:
             # Récupérer l'image de gauche
@@ -178,6 +215,8 @@ class ImageProcessingApp:
             # Mettre à jour le placeholder de l'image droite
             self.image_right_placeholder.configure(image=median_filtered_image, text="")
             self.image_right_placeholder.image = median_filtered_image
+
+            self.resizeImages()
 
     def add_gaussian_noise(self):
         if hasattr(self.image_left_placeholder, "image") and self.image_left_placeholder.image:
@@ -253,6 +292,7 @@ class ImageProcessingApp:
             # Mettre à jour le placeholder de l'image gauche avec l'image originale
             self.image_left_placeholder.configure(image=self.original_image_left, text="")
             self.image_left_placeholder.image = self.original_image_left
+            self.resizeImages()
 
     def apply_average_filter_right(self):
         if hasattr(self.image_right_placeholder, "image") and self.image_right_placeholder.image:
@@ -349,6 +389,8 @@ class ImageProcessingApp:
             # Mettre à jour le placeholder de l'image gauche
             self.image_right_placeholder.configure(image=bilateral_filtered_image, text="")
             self.image_right_placeholder.image = bilateral_filtered_image
+
+            self.resizeImages()
 
 
     def compare_psnr(self):
