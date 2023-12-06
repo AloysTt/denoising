@@ -17,18 +17,22 @@ def apply_bilateral_filter(image_np, d, sigma_color, sigma_space):
 def resize_image(image: ImageTk.PhotoImage, max_width, max_height):
     width, height = image.width(), image.height()
     aspect_ratio = width / height
-
-    if width > max_width:
-        new_width = int(max_width)
-        new_height = int(new_width / aspect_ratio)
-    elif height > max_height:
-        new_height = int(max_height)
-        new_width = int(new_height * aspect_ratio)
+    max_width = max_width - 10*4
+    if width > max_width or height > max_height:
+        # L'image est plus grande que les dimensions maximales, donc redimensionner
+        if width / max_width > height / max_height:
+            new_width = int(max_width)
+            new_height = int(max_width / aspect_ratio)
+        else:
+            new_height = int(max_height)
+            new_width = int(max_height * aspect_ratio)
     else:
-        new_width, new_height = width, height
+        # L'image est plus petite que les dimensions maximales, donc agrandir
+        new_width = int(max_width)
+        new_height = int(max_width / aspect_ratio)
 
     newImage = ImageTk.getimage(image)
-    resized_image = newImage.resize((new_width, new_height), Image.NEAREST)
+    resized_image = newImage.resize((new_width, new_height), Image.BICUBIC)
     return ImageTk.PhotoImage(resized_image)
 
 class ImageProcessingApp:
@@ -100,22 +104,36 @@ class ImageProcessingApp:
         self.original_image_left = None
         self.original_image_right = None
 
+        self.source_image = None
+        self.dest_image = None
+
+        # Lier la fonction resizeImages à l'événement de redimensionnement de la fenêtre
+        self.root.bind("<Configure>", lambda event: self.resizeImages())
+
+############################################# RESIZE - LOAD - SAVE #########################################
+
     def resizeImages(self):
-        if not (hasattr(self.image_left_placeholder, "image") and self.image_left_placeholder.image
-                and hasattr(self.image_right_placeholder, "image") and self.image_right_placeholder.image):
-            return
-        current_image_left = ImageTk.getimage(self.image_left_placeholder.image)
-        self.original_image_right = ImageTk.PhotoImage(ImageTk.getimage(self.image_right_placeholder.image))
+        print("Hello")
+        current_image_left = ImageTk.getimage(self.source_image)
+        original_image_right = ImageTk.getimage(self.dest_image)
+
+        # Créer des copies des images originales
+        current_image_left_copy = current_image_left.copy()
+        original_image_right_copy = original_image_right.copy()
+
+        # Redimensionner les copies des images
         width = self.root.winfo_width()
         height = self.root.winfo_height()
+        resized_left = resize_image(ImageTk.PhotoImage(current_image_left_copy), width/2, height)
+        resized_right = resize_image(ImageTk.PhotoImage(original_image_right_copy), width/2, height)
 
-        resized_left = resize_image(ImageTk.PhotoImage(current_image_left), width/2, height)
-        resized_right = resize_image(self.original_image_right, width/2, height)
-
+        # Mettre les images redimensionnées dans les placeholders
         self.image_left_placeholder.configure(image=resized_left, text="")
         self.image_left_placeholder.image = resized_left
+
         self.image_right_placeholder.configure(image=resized_right, text="")
         self.image_right_placeholder.image = resized_right
+
 
     def load_image_left(self):
         file_path = filedialog.askopenfilename(title="Sélectionner une image")
@@ -130,8 +148,11 @@ class ImageProcessingApp:
             self.image_left_placeholder.configure(image=original_image, text="")
             self.image_left_placeholder.image = original_image
 
-            # Stocker l'image originale
+            # Les images left
             self.original_image_left = original_image
+            self.source_image = original_image
+
+
 
     def save_image_right(self):
         if hasattr(self.image_right_placeholder, "image") and self.image_right_placeholder.image:
@@ -140,25 +161,13 @@ class ImageProcessingApp:
                 image_pil = ImageTk.getimage(self.image_right_placeholder.image)
                 image_pil.save(file_path)
 
+
+################################### FILTER LEFT TO RIGHT ###########################################
+
     def apply_ffdnet(self):
         if hasattr(self.image_left_placeholder, "image") and self.image_left_placeholder.image:
             image_pil = ImageTk.getimage(self.image_left_placeholder.image)
-            image_np=np.array(image_pil)
-            # Apply FFDNet
-            denoised_img = run_model(image_np, torch.cuda.is_available(), "net.pth", 50)
-
-            new_img = Image.fromarray(denoised_img)
-            new_img = ImageTk.PhotoImage(new_img)
-
-            # Mettre à jour le placeholder de l'image droite
-            self.image_right_placeholder.configure(image=new_img, text="")
-            self.image_right_placeholder.image = new_img
-            self.resizeImages()
-
-    def apply_ffdnet_right(self):
-        if hasattr(self.image_right_placeholder, "image") and self.image_right_placeholder.image:
-            image_pil = ImageTk.getimage(self.image_right_placeholder.image)
-            image_np=np.array(image_pil)
+            image_np = np.array(image_pil)
             # Apply FFDNet
             denoised_img = run_model(image_np, torch.cuda.is_available(), "net.pth", 50)
 
@@ -173,7 +182,7 @@ class ImageProcessingApp:
     def blur_image_left(self):
         if hasattr(self.image_left_placeholder, "image") and self.image_left_placeholder.image:
             # Récupérer l'image de gauche
-            image_pil = ImageTk.getimage(self.image_left_placeholder.image)
+            image_pil = ImageTk.getimage(self.source_image)
 
             # Convertir l'image PIL en tableau NumPy BGR
             image_np = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
@@ -188,11 +197,12 @@ class ImageProcessingApp:
             # Mettre à jour le placeholder de l'image droite
             self.image_right_placeholder.configure(image=blurred_image, text="")
             self.image_right_placeholder.image = blurred_image
+            self.source_image = blurred_image
 
     def apply_average_filter(self):
         if hasattr(self.image_left_placeholder, "image") and self.image_left_placeholder.image:
             # Récupérer l'image de gauche
-            image_pil = ImageTk.getimage(self.image_left_placeholder.image)
+            image_pil = ImageTk.getimage(self.source_image)
 
             # Convertir l'image PIL en tableau NumPy BGR
             image_np = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
@@ -207,13 +217,14 @@ class ImageProcessingApp:
             # Mettre à jour le placeholder de l'image droite
             self.image_right_placeholder.configure(image=average_filtered_image, text="")
             self.image_right_placeholder.image = average_filtered_image
+            self.source_image = average_filtered_image
 
             self.resizeImages()
 
     def apply_gaussian_filter(self):
         if hasattr(self.image_left_placeholder, "image") and self.image_left_placeholder.image:
             # Récupérer l'image de gauche
-            image_pil = ImageTk.getimage(self.image_left_placeholder.image)
+            image_pil = ImageTk.getimage(self.source_image)
 
             # Convertir l'image PIL en tableau NumPy BGR
             image_np = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
@@ -228,13 +239,14 @@ class ImageProcessingApp:
             # Mettre à jour le placeholder de l'image droite
             self.image_right_placeholder.configure(image=gaussian_filtered_image, text="")
             self.image_right_placeholder.image = gaussian_filtered_image
+            self.source_image = gaussian_filtered_image
 
             self.resizeImages()
 
     def apply_median_filter(self):
         if hasattr(self.image_left_placeholder, "image") and self.image_left_placeholder.image:
             # Récupérer l'image de gauche
-            image_pil = ImageTk.getimage(self.image_left_placeholder.image)
+            image_pil = ImageTk.getimage(self.source_image)
 
             # Convertir l'image PIL en tableau NumPy BGR
             image_np = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
@@ -249,13 +261,15 @@ class ImageProcessingApp:
             # Mettre à jour le placeholder de l'image droite
             self.image_right_placeholder.configure(image=median_filtered_image, text="")
             self.image_right_placeholder.image = median_filtered_image
-
+            self.source_image = median_filtered_image
             self.resizeImages()
+
+############################################ NOISE PART ####################################################
 
     def add_gaussian_noise(self):
         if hasattr(self.image_left_placeholder, "image") and self.image_left_placeholder.image:
             # Récupérer l'image de gauche
-            image_pil = ImageTk.getimage(self.image_left_placeholder.image)
+            image_pil = ImageTk.getimage(self.source_image)
 
             # Convertir l'image PIL en tableau NumPy BGR
             image_np = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
@@ -273,11 +287,12 @@ class ImageProcessingApp:
             # Mettre à jour le placeholder de l'image gauche
             self.image_left_placeholder.configure(image=noisy_image, text="")
             self.image_left_placeholder.image = noisy_image
+            self.dist_image = noisy_image
 
     def add_salt_and_pepper_noise(self):
         if hasattr(self.image_left_placeholder, "image") and self.image_left_placeholder.image:
             # Récupérer l'image de gauche
-            image_pil = ImageTk.getimage(self.image_left_placeholder.image)
+            image_pil = ImageTk.getimage(self.source_image)
 
             # Convertir l'image PIL en tableau NumPy BGR
             image_np = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
@@ -297,11 +312,12 @@ class ImageProcessingApp:
             # Mettre à jour le placeholder de l'image gauche
             self.image_left_placeholder.configure(image=noisy_image, text="")
             self.image_left_placeholder.image = noisy_image
+            self.dist_image = noisy_image
 
     def add_speckle_noise(self):
         if hasattr(self.image_left_placeholder, "image") and self.image_left_placeholder.image:
             # Récupérer l'image de gauche
-            image_pil = ImageTk.getimage(self.image_left_placeholder.image)
+            image_pil = ImageTk.getimage(self.source_image)
 
             # Convertir l'image PIL en tableau NumPy BGR
             image_np = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
@@ -320,6 +336,9 @@ class ImageProcessingApp:
             # Mettre à jour le placeholder de l'image gauche
             self.image_left_placeholder.configure(image=noisy_image, text="")
             self.image_left_placeholder.image = noisy_image
+            self.dist_image = noisy_image
+
+######################################### REPLACE LEFT TO ORIGINAL LEFT #####################################
 
     def get_back_to_original(self):
         if self.original_image_left:
@@ -328,10 +347,27 @@ class ImageProcessingApp:
             self.image_left_placeholder.image = self.original_image_left
             self.resizeImages()
 
+######################################## FILTER TO RIGHT ####################################################
+
+    def apply_ffdnet_right(self):
+        if hasattr(self.image_right_placeholder, "image") and self.image_right_placeholder.image:
+            image_pil = ImageTk.getimage(self.image_right_placeholder.image)
+            image_np=np.array(image_pil)
+            # Apply FFDNet
+            denoised_img = run_model(image_np, torch.cuda.is_available(), "net.pth", 50)
+
+            new_img = Image.fromarray(denoised_img)
+            new_img = ImageTk.PhotoImage(new_img)
+
+            # Mettre à jour le placeholder de l'image droite
+            self.image_right_placeholder.configure(image=new_img, text="")
+            self.image_right_placeholder.image = new_img
+            self.resizeImages()
+
     def apply_average_filter_right(self):
         if hasattr(self.image_right_placeholder, "image") and self.image_right_placeholder.image:
             # Récupérer l'image de droite
-            image_pil = ImageTk.getimage(self.image_right_placeholder.image)
+            image_pil = ImageTk.getimage(self.dist_image)
 
             # Convertir l'image PIL en tableau NumPy BGR
             image_np = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
@@ -346,11 +382,12 @@ class ImageProcessingApp:
             # Mettre à jour le placeholder de l'image droite
             self.image_right_placeholder.configure(image=filtered_image, text="")
             self.image_right_placeholder.image = filtered_image
+            self.dist_image = filtered_image
 
     def apply_gaussian_filter_right(self):
         if hasattr(self.image_right_placeholder, "image") and self.image_right_placeholder.image:
             # Récupérer l'image de droite
-            image_pil = ImageTk.getimage(self.image_right_placeholder.image)
+            image_pil = ImageTk.getimage(self.dist_image)
 
             # Convertir l'image PIL en tableau NumPy BGR
             image_np = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
@@ -365,11 +402,12 @@ class ImageProcessingApp:
             # Mettre à jour le placeholder de l'image droite
             self.image_right_placeholder.configure(image=filtered_image, text="")
             self.image_right_placeholder.image = filtered_image
+            self.dist_image = filtered_image
 
     def apply_median_filter_right(self):
         if hasattr(self.image_right_placeholder, "image") and self.image_right_placeholder.image:
             # Récupérer l'image de droite
-            image_pil = ImageTk.getimage(self.image_right_placeholder.image)
+            image_pil = ImageTk.getimage(self.dist_image)
 
             # Convertir l'image PIL en tableau NumPy BGR
             image_np = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
@@ -384,11 +422,12 @@ class ImageProcessingApp:
             # Mettre à jour le placeholder de l'image droite
             self.image_right_placeholder.configure(image=filtered_image, text="")
             self.image_right_placeholder.image = filtered_image
+            self.dist_image = filtered_image
 
     def apply_bilateral_filter_right(self):
             if hasattr(self.image_right_placeholder, "image") and self.image_right_placeholder.image:
                 # Récupérer l'image de droite
-                image_pil = ImageTk.getimage(self.image_right_placeholder.image)
+                image_pil = ImageTk.getimage(self.dist_image)
 
                 # Convertir l'image PIL en tableau NumPy BGR
                 image_np = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
@@ -403,12 +442,13 @@ class ImageProcessingApp:
                 # Mettre à jour le placeholder de l'image droite
                 self.image_right_placeholder.configure(image=filtered_image, text="")
                 self.image_right_placeholder.image = filtered_image
+                self.dist_image = filtered_image
 
 
     def apply_bilateral_filter(self):
         if hasattr(self.image_left_placeholder, "image") and self.image_left_placeholder.image:
             # Récupérer l'image de gauche
-            image_pil = ImageTk.getimage(self.image_left_placeholder.image)
+            image_pil = ImageTk.getimage(self.dist_image)
 
             # Convertir l'image PIL en tableau NumPy BGR
             image_np = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
@@ -423,15 +463,16 @@ class ImageProcessingApp:
             # Mettre à jour le placeholder de l'image gauche
             self.image_right_placeholder.configure(image=bilateral_filtered_image, text="")
             self.image_right_placeholder.image = bilateral_filtered_image
-
+            self.dist_image = bilateral_filtered_image
             self.resizeImages()
 
+###################################### METRICS #####################################################
 
     def compare_psnr(self):
         if hasattr(self.image_left_placeholder, "image") and hasattr(self.image_right_placeholder, "image"):
             # Récupérer les images de gauche et de droite
-            image_left_pil = ImageTk.getimage(self.image_left_placeholder.image)
-            image_right_pil = ImageTk.getimage(self.image_right_placeholder.image)
+            image_left_pil = ImageTk.getimage(self.source_image)
+            image_right_pil = ImageTk.getimage(self.dist_image)
 
             # Convertir les images PIL en tableaux NumPy BGR
             image_left_np = cv2.cvtColor(np.array(image_left_pil), cv2.COLOR_RGB2BGR)
@@ -468,6 +509,8 @@ class ImageProcessingApp:
             else:
                 self.ssim_label = tk.Label(self.root, text=result_text)
                 self.ssim_label.pack(pady=10)
+
+############################## MAIN ###############################################################
 
 if __name__ == "__main__":
     root = tk.Tk()
