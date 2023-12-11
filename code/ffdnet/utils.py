@@ -18,7 +18,7 @@ import numpy as np
 import cv2
 import torch
 import torch.nn as nn
-from skimage.metrics import peak_signal_noise_ratio
+from skimage.metrics import peak_signal_noise_ratio, normalized_root_mse, structural_similarity
 
 def weights_init_kaiming(lyr):
 	r"""Initializes weights of the model according to the "He" initialization
@@ -56,6 +56,39 @@ def batch_psnr(img, imclean, data_range):
 		psnr += peak_signal_noise_ratio(imgclean[i, :, :, :], img_cpu[i, :, :, :], \
 					   data_range=data_range)
 	return psnr/img_cpu.shape[0]
+
+def batch_ssim(img, imclean, data_range):
+	r"""
+	Computes the SSIM along the batch dimension
+
+	Args:
+		img: a `torch.Tensor` containing the restored image
+		imclean: a `torch.Tensor` containing the reference image
+		data_range: The data range of the input image (distance between
+			minimum and maximum possible values). By default, this is estimated
+			from the image data-type.
+	"""
+	img_cpu = img.data.cpu().numpy().astype(np.float32)
+	imgclean = imclean.data.cpu().numpy().astype(np.float32)
+	ssim = 0
+	for i in range(img_cpu.shape[0]):
+		ssim += structural_similarity(imgclean[i, :, :, :], img_cpu[i, :, :, :], data_range=data_range, channel_axis=0)
+	return ssim/img_cpu.shape[0]
+
+def batch_nrmse(img, imclean):
+	r"""
+	Computes the NRMSE along the batch dimension
+
+	Args:
+		img: a `torch.Tensor` containing the restored image
+		imclean: a `torch.Tensor` containing the reference image
+	"""
+	img_cpu = img.data.cpu().numpy().astype(np.float32)
+	imgclean = imclean.data.cpu().numpy().astype(np.float32)
+	nrmse = 0
+	for i in range(img_cpu.shape[0]):
+		nrmse += normalized_root_mse(imgclean[i, :, :, :], img_cpu[i, :, :, :])
+	return nrmse/img_cpu.shape[0]
 
 def data_augmentation(image, mode):
 	r"""Performs dat augmentation of the input image

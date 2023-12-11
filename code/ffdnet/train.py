@@ -27,7 +27,7 @@ import torchvision.utils as utils
 from tensorboardX import SummaryWriter
 from models import FFDNet
 from dataset import DatasetTrain, DatasetValidation
-from utils import weights_init_kaiming, batch_psnr, init_logger, \
+from utils import weights_init_kaiming, batch_psnr, batch_nrmse, batch_ssim, init_logger, \
 			svd_orthogonalization
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
@@ -44,12 +44,6 @@ def main(args):
 	loader_train = DataLoader(dataset=dataset_train, num_workers=0,
 							  batch_size=args.batch_size, shuffle=True)#, persistent_workers=True)
 	print("\t# of training samples: %d\n" % int(len(dataset_train)))
-
-	# Init loggers
-	if not os.path.exists(args.log_dir):
-		os.makedirs(args.log_dir)
-	writer = SummaryWriter(args.log_dir)
-	logger = init_logger(args)
 
 	# Create model
 	if not args.gray:
@@ -111,6 +105,8 @@ def main(args):
 		training_params['current_lr'] = 0
 		training_params['no_orthog'] = args.no_orthog
 
+	logfile = open("log.dat", "w")
+
 	# Training
 	for epoch in range(start_epoch, args.epochs):
 		# Learning rate value scheduling according to args.milestone
@@ -168,9 +164,9 @@ def main(args):
 					model.apply(svd_orthogonalization)
 
 				# Log the scalar values
-				writer.add_scalar('loss', loss.item(), training_params['step'])
-				writer.add_scalar('PSNR on training data', psnr_train, \
-					  training_params['step'])
+				# writer.add_scalar('loss', loss.item(), training_params['step'])
+				# writer.add_scalar('PSNR on training data', psnr_train, \
+				# 	  training_params['step'])
 				print("[epoch %d][%d/%d] loss: %.4f PSNR_train: %.4f" %\
 					(epoch+1, i+1, len(loader_train), loss.item(), psnr_train))
 			training_params['step'] += 1
@@ -182,6 +178,8 @@ def main(args):
 
 		# Validation
 		psnr_val = 0
+		nrmse_val = 0
+		ssim_val = 0
 		for valimg in dataset_val:
 			imgn_val = torch.unsqueeze(valimg, 0)
 			img_val = imgn_val[:, 3:, :, :]
@@ -191,36 +189,42 @@ def main(args):
 			sigma_noise = Variable(torch.cuda.FloatTensor([args.val_noiseL]))
 			out_val = model(imgn_val, sigma_noise)
 			psnr_val += batch_psnr(out_val, img_val, 1.)
+			nrmse_val += batch_nrmse(out_val, img_val)
+			ssim_val += batch_ssim(out_val, img_val, 1.)
 		psnr_val /= len(dataset_val)
-		print("\n[epoch %d] PSNR_val: %.4f" % (epoch+1, psnr_val))
-		writer.add_scalar('PSNR on validation data', psnr_val, epoch)
-		writer.add_scalar('Learning rate', current_lr, epoch)
+		nrmse_val /= len(dataset_val)
+		ssim_val /= len(dataset_val)
+		print("\n[epoch %d] PSNR_val: %.4f NRMSE_val: %.4f SSIM_val: %.4f" % (epoch+1, psnr_val, nrmse_val, ssim_val))
+		logfile.write(f"{epoch + 1}\t{psnr_val}\t{nrmse_val}\t{ssim_val}\n")
+
+		# writer.add_scalar('PSNR on validation data', psnr_val, epoch)
+		# writer.add_scalar('Learning rate', current_lr, epoch)
 
 		# Log val images
-		try:
-			if epoch == 0:
-				# Log graph of the model
-				writer.add_graph(model, (imgn_val, sigma_noise), )
-				# Log validation images
-				for idx in range(2):
-					imclean = utils.make_grid(img_val.data[idx].clamp(0., 1.), \
-											nrow=2, normalize=False, scale_each=False)
-					imnsy = utils.make_grid(imgn_val.data[idx].clamp(0., 1.), \
-											nrow=2, normalize=False, scale_each=False)
-					writer.add_image('Clean validation image {}'.format(idx), imclean, epoch)
-					writer.add_image('Noisy validation image {}'.format(idx), imnsy, epoch)
-			for idx in range(2):
-				imrecons = utils.make_grid(out_val.data[idx].clamp(0., 1.), \
-										nrow=2, normalize=False, scale_each=False)
-				writer.add_image('Reconstructed validation image {}'.format(idx), \
-								imrecons, epoch)
-			# Log training images
-			imclean = utils.make_grid(img_train.data, nrow=8, normalize=True, \
-						 scale_each=True)
-			writer.add_image('Training patches', imclean, epoch)
-
-		except Exception as e:
-			logger.error("Couldn't log results: {}".format(e))
+		# try:
+		# 	if epoch == 0:
+		# 		# Log graph of the model
+		# 		writer.add_graph(model, (imgn_val, sigma_noise), )
+		# 		# Log validation images
+		# 		for idx in range(2):
+		# 			imclean = utils.make_grid(img_val.data[idx].clamp(0., 1.), \
+		# 									nrow=2, normalize=False, scale_each=False)
+		# 			imnsy = utils.make_grid(imgn_val.data[idx].clamp(0., 1.), \
+		# 									nrow=2, normalize=False, scale_each=False)
+		# 			writer.add_image('Clean validation image {}'.format(idx), imclean, epoch)
+		# 			writer.add_image('Noisy validation image {}'.format(idx), imnsy, epoch)
+		# 	for idx in range(2):
+		# 		imrecons = utils.make_grid(out_val.data[idx].clamp(0., 1.), \
+		# 								nrow=2, normalize=False, scale_each=False)
+		# 		writer.add_image('Reconstructed validation image {}'.format(idx), \
+		# 						imrecons, epoch)
+		# 	# Log training images
+		# 	imclean = utils.make_grid(img_train.data, nrow=8, normalize=True, \
+		# 				 scale_each=True)
+		# 	writer.add_image('Training patches', imclean, epoch)
+		#
+		# except Exception as e:
+		# 	logger.error("Couldn't log results: {}".format(e))
 
 		# save model and checkpoint
 		training_params['start_epoch'] = epoch + 1
@@ -236,6 +240,8 @@ def main(args):
 			torch.save(save_dict, os.path.join(args.log_dir, \
 									  'ckpt_e{}.pth'.format(epoch+1)))
 		del save_dict
+
+	logfile.close()
 
 if __name__ == "__main__":
 
