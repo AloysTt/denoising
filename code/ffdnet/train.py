@@ -110,8 +110,11 @@ def main(args):
 	# Training
 	for epoch in range(start_epoch, args.epochs):
 		# Learning rate value scheduling according to args.milestone
-		if epoch > args.milestone[1]:
+		if epoch > args.milestone[2]:
 			current_lr = args.lr / 1000.
+			training_params['no_orthog'] = True
+		elif epoch > args.milestone[1]:
+			current_lr = args.lr / 100.
 			training_params['no_orthog'] = True
 		elif epoch > args.milestone[0]:
 			current_lr = args.lr / 10.
@@ -258,7 +261,7 @@ if __name__ == "__main__":
 					 help="Number of total training epochs")
 	parser.add_argument("--resume_training", "--r", action='store_true',\
 						help="resume training from a previous checkpoint")
-	parser.add_argument("--milestone", nargs=2, type=int, default=[50, 60], \
+	parser.add_argument("--milestone", nargs=3, type=int, default=[40, 50, 60], \
 						help="When to decay learning rate; should be lower than 'epochs'")
 	parser.add_argument("--lr", type=float, default=1e-3, \
 					 help="Initial learning rate")
