@@ -7,8 +7,29 @@ from PIL import Image, ImageTk
 import numpy as np
 from exec_model import run_model
 
-from custom_filter import custom_blur,custom_median_blur,custom_gaussian_blur,custom_aloys_bilateral
+from custom_filter import custom_blur,custom_median_blur,custom_gaussian_blur
 from custom_metrics import calculate_psnr, calculate_ssim
+
+def resize_image(image: ImageTk.PhotoImage, max_width, max_height):
+    width, height = image.width(), image.height()
+    aspect_ratio = width / height
+    max_width = max_width - 10*4
+    if width > max_width or height > max_height:
+        # L'image est plus grande que les dimensions maximales, donc redimensionner
+        if width / max_width > height / max_height:
+            new_width = int(max_width)
+            new_height = int(max_width / aspect_ratio)
+        else:
+            new_height = int(max_height)
+            new_width = int(max_height * aspect_ratio)
+    else:
+        # L'image est plus petite que les dimensions maximales, donc agrandir
+        new_width = int(max_width)
+        new_height = int(max_width / aspect_ratio)
+
+    newImage = ImageTk.getimage(image)
+    resized_image = newImage.resize((new_width, new_height), Image.BICUBIC)
+    return ImageTk.PhotoImage(resized_image)
 
 class ImageProcessingApp:
     def __init__(self, root):
@@ -91,9 +112,39 @@ class ImageProcessingApp:
         self.reference_image = None
 
         # Lier la fonction resizeImages à l'événement de redimensionnement de la fenêtre
-        #self.root.bind("<Configure>", lambda event: self.resize_image(self.source_image, self.root.winfo_width(), self.root.winfo_height()))
+        self.root.bind("<Configure>", lambda event: self.resizeImages())
 ############################################# RESIZE - LOAD - SAVE #########################################
 
+    def resizeImages(self):
+        width = self.root.winfo_width()/3
+        height = self.root.winfo_height()
+        resized_left = None
+        resized_right = None
+        resized_ref = None
+        if self.source_image is not None:
+            current_image_left = ImageTk.getimage(self.source_image)
+            copy_image_left = current_image_left.copy()
+            resized_left = resize_image(ImageTk.PhotoImage(copy_image_left), width, height)
+        if self.dest_image is not None:
+            current_image_right = ImageTk.getimage(self.dest_image)
+            copy_image_right = current_image_right.copy()
+            resized_right = resize_image(ImageTk.PhotoImage(copy_image_right), width, height)
+        if self.reference_image is not None:
+            current_image_ref = ImageTk.getimage(self.reference_image)
+            copy_image_ref = current_image_ref.copy()
+            resized_ref = resize_image(ImageTk.PhotoImage(copy_image_ref), width, height)
+
+        if resized_left is not None:
+            self.image_left_placeholder.configure(image=resized_left, text="")
+            self.image_left_placeholder.image = resized_left
+
+        if resized_right is not None:
+            self.image_right_placeholder.configure(image=resized_right, text="")
+            self.image_right_placeholder.image = resized_right
+
+        if resized_ref is not None:
+            self.image_reference_placeholder.configure(image=resized_ref, text="")
+            self.image_reference_placeholder.image = resized_ref
 
     def load_image_left(self):
         file_path = filedialog.askopenfilename(title="Sélectionner une image")
@@ -138,7 +189,7 @@ class ImageProcessingApp:
 
     def apply_ffdnet(self):
         if hasattr(self.image_left_placeholder, "image") and self.image_left_placeholder.image:
-            image_pil = ImageTk.getimage(self.image_left_placeholder.image)
+            image_pil = ImageTk.getimage(self.source_image)
             image_np = np.array(image_pil)
             # Apply FFDNet
             denoised_img = run_model(image_np, torch.cuda.is_available(), "net.pth", 50)
@@ -149,7 +200,7 @@ class ImageProcessingApp:
             # Mettre à jour le placeholder de l'image droite
             self.image_right_placeholder.configure(image=new_img, text="")
             self.image_right_placeholder.image = new_img
-            self.resizeImages()
+            self.dest_image = new_img
 
     def blur_image_left(self):
         if hasattr(self.image_left_placeholder, "image") and self.image_left_placeholder.image:
